@@ -1,66 +1,78 @@
 #include <stdlib.h>
-
-#include "util.h"
+#include <string.h>
 #include "queue.h"
 
-// Create new node
-static queue_node* queue_new_node(void){
-    queue_node* new_node;
-    new_node = mallocx(sizeof(queue_node));
-    position* pst = mallocx(sizeof(position));
-
-    new_node->pst = pst;
-    new_node->next = NULL;
-    return new_node;
+/**
+ * @brief Cria um novo elemento para inserir na fila
+ * 
+ * @param data Dados a serem armazenados
+ * @return queue_iter
+ */
+queue_iter make_node(void *data, size_t sz) {
+    queue_iter node = malloc(sizeof(queue_node));
+    node->data = malloc(sz);
+    memcpy(node->data, data, sz);
+    node->next = NULL;
+    return node;
 }
 
-// Remove first item of the queue
-void remove_head(queue* l){
-    queue_node* node = l->head;
-
-    if (l->size == 1)
-        l->tail = NULL;
-
-    l->head = l->head->next;
-    l->size--;
-
-    free(node->pst);
-    free(node);
-    return;
+/**
+ * @brief Verifica se a fila está vazia
+ * 
+ * @param q Ponteiro para a fila
+ * 
+ * @return 1 se a fila está vazia, 0 caso contrário
+ */
+int queue_empty(queue *q) {
+    return (q->front == q->back && q->back == NULL);
 }
 
-// Add item to the end of the queue
-void append(queue* l){
-    queue_node* new_node = queue_new_node();
-
-    if (l->size == 0)
-        l->head = new_node;
-    else 
-        l->tail->next = new_node;
-
-    l->tail = new_node;
-    l->size++;
-    return;
+/**
+ * @brief Insere um elemento no final da fila
+ * 
+ * @param q Ponteiro para a fila
+ * @param node Elemento à ser inserido
+ */
+void queue_push_back(queue *q, queue_iter node) {
+    // caso a fila estiver vazia, o elemento inserido será o primeiro e
+    // o último da fila simultaneamente
+    if (q->front == q->back && q->back == NULL) {
+        q->front = node;
+    }
+    // se a fila não estiver vazia, o último da fila apontará para o novo elemento
+    else if (q->back != NULL) {
+        q->back->next = node;
+    }
+    // novo elemento é o último da fila
+    q->back = node;
 }
 
-// Initialize queue
-void queue_initialize(queue** l){
-    // Allocate memory
-    (*l) = mallocx(sizeof(queue));
-    // Make head and tail pointing to NULL
-    (*l)->head = NULL;
-    (*l)->tail = NULL;
-    // Make size 0
-    (*l)->size = 0;
-    return;
+/**
+ * @brief Remove o primeiro da fila
+ * 
+ * @param q Ponteiro para a fila
+ */
+void queue_pop_front(queue* q) {
+    queue_iter aux = q->front;
+    q->front = aux->next;
+
+    // se o próximo da fila era NULL, a fila está vazia agora
+    if (q->front == NULL) {
+        q->back = NULL;
+    }
+
+    free(aux->data);
+    free(aux);
 }
 
-// Delete all items in queue and the queue itself
-void queue_delete(queue** l){
-    // Remove all nodes first and remove queue after
-    while((*l)->size != 0)
-        remove_head(*l);
-    free(*l);
-    *l = NULL;
-    return;
+/**
+ * @brief Cria uma nova fila vazia
+ * 
+ * @return queue* 
+ */
+queue* new_queue(void) {
+    queue* q = malloc(sizeof(queue));
+    q->back = NULL;
+    q->front = NULL;
+    return q;
 }

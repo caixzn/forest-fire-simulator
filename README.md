@@ -10,13 +10,6 @@ Nowadays, one of the great challenges for countries that have a vast forest regi
 * Matriculation: 211057600001
 * Sistemas Operacionais 1 - Class A
 
-## Contents
-+ `README.md`: This file.
-+ `src\*.c`: Codes in C.
-+ `src\*.h`: Header files
-+ `Makefile`: File for `Make`.
-+ `.gitignore`: Ignore executables.
-
 ## Prerequisites
 Before starting, it is essential to have installed the `GNU make` tool and the compiler `gcc`, in order to compile the files.
 

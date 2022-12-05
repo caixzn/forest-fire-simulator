@@ -4,25 +4,29 @@
 
 #include "util.h"
 
-// Function to allocate memory and verify it
-void* mallocx(const unsigned int size){
-    void* alloc;
-    alloc = malloc(size);
-    if (alloc == NULL){
-        printf("Allocation error\n");
-        exit(EXIT_FAILURE);
-    }
-    return alloc;
+void write_to_log(message_t msg) {
+    FILE *log = fopen("incendios.log", "a");
+    struct tm *tm_struct = localtime(&(msg.time));
+    int hr = tm_struct->tm_hour;
+    int min = tm_struct->tm_min;
+    int sec = tm_struct->tm_sec;
+    fprintf(
+        log,
+        "incendio detectado pelo nó %lu, na posição (%d, %d), às %02d:%02d:%02d\n",
+        msg.id, msg.pos.x, msg.pos.y, hr, min, sec
+    );
+    fclose(log);
 }
 
-// Convert time in int to string
-char* time_to_hour(char* time_string){
-    time_t current_time;
-    struct tm * time_info;
-
-    time(&current_time);
-    time_info = localtime(&current_time);
-    sprintf(time_string, "%02d:%02d:%02d", 
-            time_info->tm_hour, time_info->tm_min, time_info->tm_sec);
-    return time_string;
+int msg_compare(void *a, void *b) {
+    message_t *msg_a = (message_t *) a; 
+    message_t *msg_b = (message_t *) b;
+    long time_diff = msg_a->time - msg_b->time;
+    if (msg_a->id == msg_b->id &&
+        (time_diff < 3 || time_diff > -3) &&
+        msg_a->pos.x == msg_b->pos.x &&
+        msg_a->pos.y == msg_b->pos.y) {
+            return 0;
+    }
+    return 1;
 }

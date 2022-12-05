@@ -1,229 +1,236 @@
-#include <stdio.h>       
-#include <pthread.h>     
 #include <stdlib.h>
-#include <stdbool.h>
+#include <stdio.h>
+#include <pthread.h>
 #include <unistd.h>
-
-#include "queue.h"
+#include <string.h>
+#include <time.h>
 #include "util.h"
+#include "queue.h"
 
-pthread_mutex_t lock;
-node** matrix;
-FILE* incendios;
+#define GRID_SZ 30
 
-// Thread to print the map of the forest every second
-void* update_screen(void* data){
-    while(true){
-        sleep(1);
-        // Access critical region
-        pthread_mutex_lock(&lock);
-        for (int i = 0; i < GRID; i++){
-            for (int j = 0; j < GRID; j++){
-                if (matrix[i][j].state == 'T')
-                    printf("\033[1;33m");
-                else if (matrix[i][j].state == '@')
-                    printf("\033[1;31m");
-                else
-                    printf("\033[0;32m");
-                printf("%3c", matrix[i][j].state);
+pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
+char map[GRID_SZ][GRID_SZ];
+pthread_t threads[GRID_SZ/3][GRID_SZ/3];
+queue *messages[GRID_SZ/3][GRID_SZ/3];
+pthread_mutex_t msg_lock[GRID_SZ/3][GRID_SZ/3];
+queue *central_alerts;
+pthread_mutex_t central_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void map_init(void);
+void msg_init(void);
+void *fire_spread(void *data);
+void *sensor_node(void *data);
+void *firefighter(void *data);
+void *display_map(void *data);
+void *central_thread(void *data);
+
+int main(void) {
+    msg_init();
+    map_init();
+    pthread_t central, fire, display;
+    pthread_create(&central, NULL, central_thread, NULL);
+    pthread_create(&fire, NULL, fire_spread, NULL);
+    pthread_create(&display, NULL, display_map, NULL);
+    pthread_join(display, NULL);
+    // the program never terminates itself
+}
+
+void msg_init(void) {
+    for (int i = 0; i < GRID_SZ/3; ++i) {
+        for (int j = 0; j < GRID_SZ/3; ++j) {
+            messages[i][j] = new_queue();
+            pthread_mutex_init(&msg_lock[i][j], NULL);
+        }
+    }
+}
+
+void map_init(void) {
+    for (int i = 0; i < GRID_SZ; ++i) {
+        for (int j = 0; j < GRID_SZ; ++j) {
+            // grass
+            map[i][j] = 'w';
+            // sensor node
+            if (i%3 == 1 && j%3 == 1) {
+                map[i][j] = 'T';
+                coord_t *pos = (coord_t *)malloc(sizeof(coord_t));
+                pos->x = i;
+                pos->y = j;
+                pthread_create(&threads[i/3][j/3], NULL, sensor_node, (void *) pos);
             }
-            printf("\n");
-        }
-        printf("\n");
-        pthread_mutex_unlock(&lock);
-    }
-    pthread_exit(NULL);
-}
-
-// Thread to put out the fire and register when it was put out.
-void* fireman(void* data){
-    message* msg = (message*) data;
-    int x = msg->pst.x;
-    int y = msg->pst.y;
-    sleep(2);
-
-    // Get actual time and send log information to RAM
-    char time_string[9]; 
-    char* time_aux = time_to_hour((char*)&time_string);
-    fprintf(incendios, "%s - %lu - (%d, %d)\n", time_aux, msg->thread_id, x, y);
-    
-    // Access critical region
-    pthread_mutex_lock(&lock);
-    matrix[x][y].state = '-';
-    matrix[x][y].visited = false;
-    pthread_mutex_unlock(&lock);
-
-    // Update log and exit
-    fclose(incendios);
-    incendios = fopen("incendios.log", "a");
-    pthread_exit(NULL);
-}
-
-void bfs(message* msg, int x, int y){
-    // Initialize queue
-    queue* q;
-    queue_initialize(&q);
-    append(q);
-    q->tail->pst->x = x;
-    q->tail->pst->y = y;
-    while(q->size != 0){
-        queue_node* head = q->head;
-        int x = head->pst->x;
-        int y = head->pst->y;
-        // Verify if the borders sensors are found
-        if (x == 1 || y == 1){
-            pthread_t aux;
-            pthread_create(&aux, NULL, fireman, (void*) msg);
-            break;
-        }
-        if (x == GRID - 2 || y == GRID - 2){
-            pthread_t aux;
-            pthread_create(&aux, NULL, fireman, (void*) msg);
-            break;
-        }
-        // Verify limits of the search
-        if (x < 0 || y < 0){
-            remove_head(q);
-            continue;
-        }
-        if (x > GRID || y > GRID){
-            remove_head(q);
-            continue;
-        }
-        // Verify if the sensor was destroyed
-        if (matrix[x][y].state != 'T'){
-            remove_head(q);
-            continue;
-        }
-        if (matrix[x][y].visited){
-            remove_head(q);
-            continue;
-        }
-        matrix[x][y].visited = true;
-        // Add neighbor sensors to the search
-        append(q);
-        q->tail->pst->x = x - 3;
-        q->tail->pst->y = y;
-        append(q);
-        q->tail->pst->x = x + 3;
-        q->tail->pst->y = y;
-        append(q);
-        q->tail->pst->x = x;
-        q->tail->pst->y = y - 3;
-        append(q);
-        q->tail->pst->x = x;
-        q->tail->pst->y = y + 3;
-    }
-    queue_delete(&q);
-    return;
-}
-
-// Function to restart the visited sensors after
-// a BFS is done.
-void restart(){
-    for (int i = 1; i < GRID; i += 3){
-        for (int j = 1; j < GRID; j += 3){
-            matrix[i][j].visited = false;
         }
     }
 }
 
-// Function to 
-void* surveillance(void* data){
-    node* sensor = (node*) data;
-    while(true){
-        sleep(1);
-        // Enter critical region
-        pthread_mutex_lock(&lock);
-        int x = sensor->pst.x;
-        int y = sensor->pst.y;
-        // Verify if the sensor was not destroyed
-        if (sensor->state != '@'){
-            // Verify surrounds
-            for (int i = x - 1; i <= x + 1; i++){
-                for (int j = y - 1; j <= y + 1; j++){
-                    // If there is a fire already visited, ignore
-                    if (matrix[i][j].visited)
-                        continue;
-                    if (matrix[i][j].state == '@'){
-                        // Send message to neighbor sensors
-                        message aux;
-                        aux.thread_id = sensor->thread_id;
-                        position aux1;
-                        aux1.x = i;
-                        aux1.y = j;
-                        aux.pst = aux1;
-                        message* msg = &aux;
-                        matrix[i][j].visited = true;
-                        bfs(msg, x, y);
-                        restart();
-                    }
+void *fire_spread(void *data) {
+    srand(time(NULL));
+    while (1) {
+        sleep(5);
+        int x = random() % GRID_SZ;
+        int y = random() % GRID_SZ;
+        pthread_mutex_lock(&map_lock);
+        map[x][y] = '@';
+        pthread_mutex_unlock(&map_lock);
+    }
+}
+
+void *sensor_node(void *data) {
+    coord_t pos = *(coord_t *)data;
+    int x = pos.x, y = pos.y;
+    int id_x = x/3, id_y = y/3;
+    free(data);
+
+    queue *msgs_to_send = new_queue();
+
+    while (map[x][y] == 'T') {
+        pthread_mutex_lock(&map_lock);
+        for (int i = x-1; i <= x+1; ++i) {
+            for (int j = y-1; j <= y+1; ++j) {
+                if (map[i][j] == '@') {
+                    message_t *msg = malloc(sizeof(message_t));
+                    msg->time = time(NULL);
+                    msg->id = threads[id_x][id_y];
+                    msg->pos.x = i;
+                    msg->pos.y = j;
+                    msg->prev_sender = msg->id;
+                    queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
                 }
             }
-            pthread_mutex_unlock(&lock);
+        }
+        pthread_mutex_unlock(&map_lock);
+
+        if (!queue_empty(messages[id_x][id_y])) {
+            pthread_mutex_lock(&msg_lock[id_x][id_y]);
+            while (!queue_empty(messages[id_x][id_y])) {
+                queue_iter it = messages[id_x][id_y]->front;
+                message_t *m = (message_t *)it->data;
+                m->prev_sender = threads[id_x][id_y];
+                queue_pop_front(messages[id_x][id_y]);
+                queue_push_back(msgs_to_send, make_node((void *)m, sizeof(message_t)));
+            }
+            pthread_mutex_unlock(&msg_lock[id_x][id_y]);
+        }
+
+        if (!queue_empty(msgs_to_send)) {
+            coord_t coords[] = {
+                {id_x - 1, id_y},
+                {id_x + 1, id_y},
+                {id_x, id_y - 1},
+                {id_x, id_y + 1}
+            };
+            if (id_x - 1 < 0 || id_y - 1 < 0 || id_x + 1 >= GRID_SZ/3 ||
+                id_y + 1 >= GRID_SZ/3) {
+                pthread_mutex_lock(&central_lock);
+                while (!queue_empty(msgs_to_send)) {
+                    queue_push_back(central_alerts, make_node(msgs_to_send->front->data, sizeof(message_t)));
+                    queue_pop_front(msgs_to_send);
+                }
+                pthread_mutex_unlock(&central_lock);
+            }
+            else {
+                for (int i = 0; i < 4; ++i) {
+                    int tmp_x = coords[i].x, tmp_y = coords[i].y;
+                    queue_iter it = msgs_to_send->front;
+                    pthread_mutex_lock(&msg_lock[tmp_x][tmp_y]);
+                    while (it != NULL) {
+                        message_t *m = (message_t *)it->data;
+                        if (threads[tmp_x][tmp_y] != m->prev_sender)
+                            queue_push_back(messages[tmp_x][tmp_y], make_node(it->data, sizeof(message_t)));
+                        it = it->next;
+                    }
+                    pthread_mutex_unlock(&msg_lock[tmp_x][tmp_y]);
+                }
+                while (!queue_empty(msgs_to_send))
+                    queue_pop_front(msgs_to_send);
+            }
+        }
+
+        sleep(1);
+    }
+
+    pthread_mutex_lock(&msg_lock[id_x][id_y]);
+    while (!queue_empty(messages[id_x][id_y]))
+        queue_pop_front(messages[id_x][id_y]);
+    pthread_mutex_unlock(&msg_lock[id_x][id_y]);
+    pthread_detach(pthread_self());
+    pthread_exit(NULL);
+}
+
+void *central_thread(void *data) {
+    central_alerts = new_queue();
+
+    queue* written_to_log = new_queue();
+
+    while (1) {
+        if (queue_empty(central_alerts)) {
+            sleep(1);
             continue;
         }
-        matrix[x][y].thread_id = 0;
-        pthread_mutex_unlock(&lock);
-        break;
+        pthread_mutex_lock(&central_lock);
+        while (!queue_empty(central_alerts)) {
+            queue_iter new = central_alerts->front;
+            queue_iter it = written_to_log->front;
+            int write_this = 1;
+            while (it != NULL) {
+                if (!msg_compare(new->data, it->data)) {
+                    write_this = 0;
+                    break;
+                }
+                it = it->next;
+            }
+            if (write_this) {
+                pthread_t thread_id;
+                message_t new_msg = *(message_t *)new->data;
+                pthread_create(&thread_id, NULL, firefighter, &map[new_msg.pos.x][new_msg.pos.y]);
+                queue_push_back(written_to_log, make_node(new->data, sizeof(message_t)));
+                write_to_log(new_msg);
+            }
+            queue_pop_front(central_alerts);
+        }
+        pthread_mutex_unlock(&central_lock);
     }
+}
+
+void *firefighter(void *data) {
+    char *state = (char *) data;
+    sleep(2);
+    pthread_mutex_lock(&map_lock);
+    *state = '_';
+    pthread_mutex_unlock(&map_lock);
     pthread_exit(NULL);
 }
 
-// Thread to start a fire
-void* fire(void* data){
-    while(true){
-        sleep(5);
-        int x = rand() % GRID;
-        int y = rand() % GRID;
-        // Access critical region
-        pthread_mutex_lock(&lock);
-        matrix[x][y].state = '@';
-        pthread_mutex_unlock(&lock);
-    }
-    pthread_exit(NULL);
-}
-
-int main(){
-    // Start log
-    incendios = fopen("incendios.log", "w");
-    pthread_t thread_id[2];
-
-    // Start forest map
-    matrix = mallocx(sizeof(node*) * GRID);
-    for (int i = 0; i < GRID; i++)
-        matrix[i] = mallocx(sizeof(node) * GRID);
-    
-    // Fill forest map with information needed
-    for (int i = 0; i < GRID; i++){
-        for (int j = 0; j < GRID; j++){
-            matrix[i][j].thread_id = 0;
-            matrix[i][j].state = '-';
-            matrix[i][j].visited = false;
-            matrix[i][j].pst.x = i;
-            matrix[i][j].pst.y = j;
+void *display_map(void *data) {
+    // clears the terminal screem
+    system("tput clear");
+    // background color
+    printf("\e[48;5;106m");
+    while (1) {
+        pthread_mutex_lock(&map_lock);
+        for (int i = 0; i < GRID_SZ; ++i) {
+            for (int j = 0; j < GRID_SZ; ++j) {
+                int color = 64; // green
+                switch (map[i][j]) {
+                    case '@':
+                        color = 202; // orange
+                        break;
+                    case 'T':
+                        color = 232; // dark gray
+                        break;
+                    case '_':
+                        color = 245; // light gray
+                        break;
+                    default:
+                        break;
+                }
+                printf("\e[38;5;%dm", color);
+                printf("%2c", map[i][j]);
+            }
+            puts(" ");
         }
+        // moves the cursor back to the beginning
+        printf("\e[H");
+        pthread_mutex_unlock(&map_lock);
+        sleep(1);
     }
-
-    // Create sensor threads
-    for (int i = 1; i < GRID; i += 3){
-        for (int j = 1; j < GRID; j += 3){
-            matrix[i][j].state = 'T';
-            pthread_create(&(matrix[i][j].thread_id), NULL, surveillance, 
-                            (void*) &matrix[i][j]);
-        }
-    }
-
-    srand(time(NULL));
-    pthread_create(&thread_id[0], NULL, update_screen, NULL);
-    pthread_create(&thread_id[1], NULL, fire, NULL);
-    
-    for (int i = 0; i < 2; i++)
-        pthread_join(thread_id[i], NULL);
-    
-
-    for (int i = 0; i < GRID; i++)
-        free(matrix[i]);
-    free(matrix);
-    return 0;
 }

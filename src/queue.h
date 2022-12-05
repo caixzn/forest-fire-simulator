@@ -1,22 +1,26 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include "structs.h"
-
+// cada elemento da fila armazena as informações do processo e um ponteiro para o proximo da fila
 typedef struct queue_node {
-    position* pst;
+    void *data;
     struct queue_node* next;
-}queue_node;
+} queue_node;
 
+typedef struct queue_node* queue_iter;
+
+// a fila armazena um ponteiro para o primeiro da fila e um para o ultimo
+// front == back -> apenas 1 elemento na fila
+// front == NULL && back == NULL -> fila vazia
 typedef struct queue {
-    queue_node* head;
-    queue_node* tail;
-    size_t size;
-}queue;
+    queue_iter front, back;
+} queue;
 
-void remove_head(queue* l);
-void append(queue* l);
-void queue_initialize(queue** l);
-void queue_delete(queue** l);
+queue_iter make_node(void *data, size_t sz);
+void queue_push_back(queue* q, queue_iter node);
+void queue_pop_front(queue* q);
+queue* new_queue(void);
+int queue_empty(queue *q);
+
 
 #endif
