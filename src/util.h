@@ -15,6 +15,7 @@ typedef struct message_t {
     pthread_t id;
     coord_t pos;
     __uint8_t visited[GRID_SZ/3][GRID_SZ/3];
+    __uint64_t message_id;
 } message_t;
 
 void write_to_log(message_t msg);

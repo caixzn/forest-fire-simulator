@@ -6,6 +6,7 @@
 #include <time.h>
 #include "util.h"
 #include "queue.h"
+#include "avl_tree.h"
 
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 char map[GRID_SZ][GRID_SZ];
@@ -90,6 +91,7 @@ void *sensor_node(void *data) {
                     msg->id = threads[id_x][id_y];
                     msg->pos.x = i;
                     msg->pos.y = j;
+                    msg->message_id = rand();
                     for (size_t i = 0; i < GRID_SZ/3; i++)
                         for (size_t j = 0; j < GRID_SZ/3; j++)
                             msg->visited[i][j] = 0;
@@ -167,6 +169,9 @@ void *central_thread(void *data) {
 
     FILE* start_log = fopen("incendios.log", "w");
     fclose(start_log);
+
+    avl_tree* message_ids;
+    avl_initialize(&message_ids);
 
     while (1) {
         sleep(1);
