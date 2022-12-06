@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define GRID_SZ 30
 
@@ -14,8 +15,8 @@ typedef struct message_t {
     time_t time;
     pthread_t id;
     coord_t pos;
-    __uint8_t visited[GRID_SZ/3][GRID_SZ/3];
-    __uint64_t message_id;
+    uint8_t visited[GRID_SZ/3][GRID_SZ/3];
+    uint64_t message_id;
 } message_t;
 
 void write_to_log(message_t msg);

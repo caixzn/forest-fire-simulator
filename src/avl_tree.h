@@ -2,6 +2,7 @@
 #define AVL_TREE_H
 
 #include <stdlib.h>
+#include <stdint.h>
 
 /**
  * @brief Nodes of the AVL tree. It stores
@@ -10,8 +11,7 @@
  * 
  */
 typedef struct avl_node{
-    __uint64_t element;
-    int weight;
+    uint32_t element;
     int height;
     struct avl_node* right;
     struct avl_node* left;
@@ -23,9 +23,9 @@ typedef struct avl_tree{
 }avl_tree;
 
 void avl_initialize(avl_tree** v);
-int search_element(avl_node* node, int k);
-void avl_insert(avl_tree* tree, int element);
-void avl_remove(avl_tree* tree, int element);
+int avl_tree_find(avl_tree* t, avl_node *v, uint32_t element)
+void avl_insert(avl_tree* tree, uint32_t element);
+void avl_remove(avl_tree* tree, uint32_t element);
 void avl_terminate(avl_tree** v);
 
 #endif

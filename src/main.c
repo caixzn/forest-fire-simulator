@@ -165,8 +165,6 @@ void *sensor_node(void *data) {
 void *central_thread(void *data) {
     central_alerts = new_queue();
 
-    queue* written_to_log = new_queue();
-
     FILE* start_log = fopen("incendios.log", "w");
     fclose(start_log);
 
@@ -178,20 +176,12 @@ void *central_thread(void *data) {
         pthread_mutex_lock(&central_lock);
         while (!queue_empty(central_alerts)) {
             queue_iter new = central_alerts->front;
-            queue_iter it = written_to_log->front;
-            int write_this = 1;
-            while (it != NULL) {
-                if (!msg_compare(new->data, it->data)) {
-                    write_this = 0;
-                    break;
-                }
-                it = it->next;
-            }
-            if (write_this) {
+            message_t new_msg = *(message_t *)new->data;
+            if (!avl_tree_find(message_ids, message_ids->root, new_msg.message_id)){
+                avl_insert(message_ids, new_msg.message_id);
                 pthread_t thread_id;
                 message_t new_msg = *(message_t *)new->data;
                 pthread_create(&thread_id, NULL, firefighter, &map[new_msg.pos.x][new_msg.pos.y]);
-                queue_push_back(written_to_log, make_node(new->data, sizeof(message_t)));
                 write_to_log(new_msg);
             }
             queue_pop_front(central_alerts);

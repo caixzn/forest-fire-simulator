@@ -11,34 +11,21 @@ inline static int get_height(avl_node* node){
         return 0;
     return node->height;
 }
+
 /**
- * @brief Get the weight object.
+ * @brief Function to calculate the balance
+ * of a certain node of the tree.
  * 
- * @param node 
- * @return int 
+ * @param node A pointer to the node
+ * @return int The balance of the node
  */
-inline static int get_weight(avl_node* node){
+static int calculate_balance(avl_node* node){
     if (node == NULL)
         return 0;
-    return node->weight;
+    return get_height(node->left) - get_height(node->right);
+    
 }
-/**
- * @brief Define the initial values
- * of the node.
- * 
- * @param value The element stored in 
- * the node
- * @return avl_node* 
- */
-static avl_node* node_builder(int value){
-    avl_node* new_node = malloc(sizeof(avl_node));
-    new_node->element = value;
-    new_node->weight = 1;
-    new_node->height = 0;
-    new_node->left = NULL;
-    new_node->right = NULL;
-    return new_node;
-}
+
 /**
  * @brief Calculate the height
  * of the node.
@@ -53,34 +40,24 @@ static int calculate_height(avl_node* node){
     int hr = get_height(node->right);
     return hl < hr ? hr + 1 : hl + 1;
 }
+
 /**
- * @brief Function to calculate the
- * weigh (how many nodes are below the
- * node) of the node.
+ * @brief Define the initial values
+ * of the node.
  * 
- * @param node A pointer to the node
- * @return int The weight of the node
+ * @param value The element stored in 
+ * the node
+ * @return avl_node* 
  */
-static int calculate_weight(avl_node* node){
-    if (node == NULL)
-        return 0;
-    int wl = get_weight(node->left);
-    int wr = get_weight(node->right);
-    return wl + wr + 1;
+static avl_node* node_builder(uint32_t value){
+    avl_node* new_node = malloc(sizeof(avl_node));
+    new_node->element = value;
+    new_node->height = 0;
+    new_node->left = NULL;
+    new_node->right = NULL;
+    return new_node;
 }
-/**
- * @brief Function to calculate the balance
- * of a certain node of the tree.
- * 
- * @param node A pointer to the node
- * @return int The balance of the node
- */
-static int calculate_balance(avl_node* node){
-    if (node == NULL)
-        return 0;
-    return get_height(node->left) - get_height(node->right);
-    
-}
+
 /**
  * @brief Rotate a segment of the tree. 
  * Used to balance it.
@@ -97,9 +74,6 @@ static avl_node* rotate_right(avl_node* root){
 
     root->height = calculate_height(root);
     middle->height = calculate_height(middle);
-    
-    root->weight = calculate_weight(root);
-    middle->weight = calculate_weight(middle);
     
     return middle;
 }
@@ -119,9 +93,6 @@ static avl_node* rotate_left(avl_node* root){
 
     root->height = calculate_height(root);
     middle->height = calculate_height(middle);
-
-    root->weight = calculate_weight(root);
-    middle->weight = calculate_weight(middle);
     
     return middle;
 }
@@ -142,27 +113,26 @@ void avl_initialize(avl_tree** v){
 }
 
 /**
- * @brief Find the k-th smallest element by
- * pruning the sides of the tree.
+ * @brief Recursive function to iterate 
+ * through the tree until the element is found.
  * 
- * @param node A pointer to the node
- * @param k The k-th smallest element
- * @return int The value of the k-th 
- * smallest element
+ * @param t Pointer to the tree
+ * @param node A node of the AVL tree
+ * @param element The element to be inserted
+ * @return int If the value was found
  */
-int search_element(avl_node* node, int k){
-    int weight_left = calculate_weight(node->left);
-    // Verify if the left side have the k-th smallest
-    if (weight_left >= k)
-        return search_element(node->left, k);
-    // Prune the side 
-    k -= weight_left;
-    // Verify if the k-th smallest isn't the root
-    if (k == 1)
-        return node->element;
-    // Move to the right side
-    return search_element(node->right, k - 1);
+int avl_tree_find(avl_tree* t, avl_node *v, uint32_t element) {
+    if (v == NULL) 
+        return 0;
+    
+    if (v->element == element)
+        return 1;
+    else if (v->element > element)
+        return avl_tree_find_helper(t, v->left, element);
+    else
+        return avl_tree_find_helper(t, v->right, element);
 }
+
 /**
  * @brief Recursive function to iterate 
  * through the tree until a leaf is reached. 
@@ -172,7 +142,7 @@ int search_element(avl_node* node, int k){
  * @param element The element to be inserted
  * @return avl_node* A pointer to the node
  */
-static avl_node* add_element(avl_node* node, int element){
+static avl_node* add_element(avl_node* node, uint32_t element){
     if (node == NULL)
         node = node_builder(element);
     else if (node->element > element)
@@ -181,7 +151,6 @@ static avl_node* add_element(avl_node* node, int element){
         node->right = add_element(node->right, element);
     
     node->height = calculate_height(node);
-    node->weight = calculate_weight(node);
     int balance = calculate_balance(node);
     
     if (balance > 1){
@@ -202,7 +171,7 @@ static avl_node* add_element(avl_node* node, int element){
  * @param tree A pointer to the tree
  * @param element The element to be inserted
  */
-void avl_insert(avl_tree* tree, int element){
+void avl_insert(avl_tree* tree, uint32_t element){
     tree->root = add_element(tree->root, element);
     tree->size++;
 }
@@ -227,7 +196,7 @@ static avl_node* find_leftmost(avl_node* node){
  * @param element The element to be removed 
  * @return avl_node* A pointer to the root
  */
-static avl_node* remove_element(avl_node* node, int element){
+static avl_node* remove_element(avl_node* node, uint32_t element){
     if (node->element == element){
         avl_node* aux = NULL;
         // Cases where the root has one child
@@ -256,7 +225,6 @@ static avl_node* remove_element(avl_node* node, int element){
         node->right = remove_element(node->right, element);
 
     node->height = calculate_height(node);
-    node->weight = calculate_weight(node);
     int balance = calculate_balance(node);
     
     if (balance > 1){
@@ -277,7 +245,7 @@ static avl_node* remove_element(avl_node* node, int element){
  * @param tree A pointer to the tree
  * @param element The value to be removed
  */
-void avl_remove(avl_tree* tree, int element){
+void avl_remove(avl_tree* tree, uint32_t element){
     tree->root = remove_element(tree->root, element);
     tree->size--;
 }
