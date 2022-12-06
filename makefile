@@ -40,7 +40,6 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 # Clean files created
 clean:
 	@ echo "Removing directories and files"
-	rm incendios.log
 	rm bin/* obj/* 
 	rmdir bin obj
-
+	rm incendios.log

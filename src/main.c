@@ -7,8 +7,6 @@
 #include "util.h"
 #include "queue.h"
 
-#define GRID_SZ 30
-
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 char map[GRID_SZ][GRID_SZ];
 pthread_t threads[GRID_SZ/3][GRID_SZ/3];
@@ -92,19 +90,21 @@ void *sensor_node(void *data) {
                     msg->id = threads[id_x][id_y];
                     msg->pos.x = i;
                     msg->pos.y = j;
-                    msg->prev_sender = msg->id;
+                    for (size_t i = 0; i < GRID_SZ/3; i++)
+                        for (size_t j = 0; j < GRID_SZ/3; j++)
+                            msg->visited[i][j] = 0;
                     queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
                 }
             }
         }
         pthread_mutex_unlock(&map_lock);
-
+        // verificar fila do sensor
         if (!queue_empty(messages[id_x][id_y])) {
             pthread_mutex_lock(&msg_lock[id_x][id_y]);
+
             while (!queue_empty(messages[id_x][id_y])) {
                 queue_iter it = messages[id_x][id_y]->front;
                 message_t *m = (message_t *)it->data;
-                m->prev_sender = threads[id_x][id_y];
                 queue_pop_front(messages[id_x][id_y]);
                 queue_push_back(msgs_to_send, make_node((void *)m, sizeof(message_t)));
             }
@@ -134,8 +134,12 @@ void *sensor_node(void *data) {
                     pthread_mutex_lock(&msg_lock[tmp_x][tmp_y]);
                     while (it != NULL) {
                         message_t *m = (message_t *)it->data;
-                        if (threads[tmp_x][tmp_y] != m->prev_sender)
+                        if (!m->visited[tmp_x][tmp_y]){
+                            pthread_mutex_lock(&msg_lock[id_x][id_y]);
+                            m->visited[id_x][id_y] = 1;
+                            pthread_mutex_unlock(&msg_lock[id_x][id_y]);
                             queue_push_back(messages[tmp_x][tmp_y], make_node(it->data, sizeof(message_t)));
+                        }
                         it = it->next;
                     }
                     pthread_mutex_unlock(&msg_lock[tmp_x][tmp_y]);
@@ -161,11 +165,11 @@ void *central_thread(void *data) {
 
     queue* written_to_log = new_queue();
 
+    FILE* start_log = fopen("incendios.log", "w");
+    fclose(start_log);
+
     while (1) {
-        if (queue_empty(central_alerts)) {
-            sleep(1);
-            continue;
-        }
+        sleep(1);
         pthread_mutex_lock(&central_lock);
         while (!queue_empty(central_alerts)) {
             queue_iter new = central_alerts->front;
@@ -201,11 +205,11 @@ void *firefighter(void *data) {
 }
 
 void *display_map(void *data) {
-    // clears the terminal screem
-    system("tput clear");
     // background color
     printf("\e[48;5;106m");
     while (1) {
+        // clears the terminal screen
+        system("tput clear");
         pthread_mutex_lock(&map_lock);
         for (int i = 0; i < GRID_SZ; ++i) {
             for (int j = 0; j < GRID_SZ; ++j) {
