@@ -31,7 +31,7 @@ inline static int get_weight(avl_node* node){
  * @return avl_node* 
  */
 static avl_node* node_builder(int value){
-    avl_node* new_node = mallocx(sizeof(avl_node));
+    avl_node* new_node = malloc(sizeof(avl_node));
     new_node->element = value;
     new_node->weight = 1;
     new_node->height = 0;
@@ -135,7 +135,7 @@ static avl_node* rotate_left(avl_node* root){
  * @param v A pointer to the AVL tree
  */
 void avl_initialize(avl_tree** v){
-    (*v) = mallocx(sizeof(avl_tree));
+    (*v) = malloc(sizeof(avl_tree));
     (*v)->root = NULL;
     (*v)->size = 0;
     return;
