@@ -9,7 +9,7 @@
 #include "avl_tree.h"
 
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
-char map[GRID_SZ][GRID_SZ];
+map_t map[GRID_SZ][GRID_SZ];
 pthread_t threads[GRID_SZ/3][GRID_SZ/3];
 queue *messages[GRID_SZ/3][GRID_SZ/3];
 pthread_mutex_t msg_lock[GRID_SZ/3][GRID_SZ/3];
@@ -25,6 +25,7 @@ void *display_map(void *data);
 void *central_thread(void *data);
 
 int main(void) {
+    srand(time(NULL));
     msg_init();
     map_init();
     pthread_t central, fire, display;
@@ -48,10 +49,11 @@ void map_init(void) {
     for (int i = 0; i < GRID_SZ; ++i) {
         for (int j = 0; j < GRID_SZ; ++j) {
             // grass
-            map[i][j] = 'w';
+            map[i][j].state = 'w';
+            map[i][j].visited = '.';
             // sensor node
             if (i%3 == 1 && j%3 == 1) {
-                map[i][j] = 'T';
+                map[i][j].state = 'T';
                 coord_t *pos = (coord_t *)malloc(sizeof(coord_t));
                 pos->x = i;
                 pos->y = j;
@@ -68,7 +70,7 @@ void *fire_spread(void *data) {
         int x = random() % GRID_SZ;
         int y = random() % GRID_SZ;
         pthread_mutex_lock(&map_lock);
-        map[x][y] = '@';
+        map[x][y].state = '@';
         pthread_mutex_unlock(&map_lock);
     }
 }
@@ -81,11 +83,14 @@ void *sensor_node(void *data) {
 
     queue *msgs_to_send = new_queue();
 
-    while (map[x][y] == 'T') {
+    while (map[x][y].state == 'T') {
         pthread_mutex_lock(&map_lock);
         for (int i = x-1; i <= x+1; ++i) {
             for (int j = y-1; j <= y+1; ++j) {
-                if (map[i][j] == '@') {
+                if (map[i][j].visited == 'X')
+                    continue;
+                if (map[i][j].state == '@') {
+                    map[i][j].visited = 'X';
                     message_t *msg = malloc(sizeof(message_t));
                     msg->time = time(NULL);
                     msg->id = threads[id_x][id_y];
@@ -100,7 +105,7 @@ void *sensor_node(void *data) {
             }
         }
         pthread_mutex_unlock(&map_lock);
-        // verificar fila do sensor
+
         if (!queue_empty(messages[id_x][id_y])) {
             pthread_mutex_lock(&msg_lock[id_x][id_y]);
 
@@ -180,7 +185,6 @@ void *central_thread(void *data) {
             if (!avl_tree_find(message_ids, message_ids->root, new_msg.message_id)){
                 avl_insert(message_ids, new_msg.message_id);
                 pthread_t thread_id;
-                message_t new_msg = *(message_t *)new->data;
                 pthread_create(&thread_id, NULL, firefighter, &map[new_msg.pos.x][new_msg.pos.y]);
                 write_to_log(new_msg);
             }
@@ -188,13 +192,15 @@ void *central_thread(void *data) {
         }
         pthread_mutex_unlock(&central_lock);
     }
+    avl_terminate(&message_ids);
 }
 
 void *firefighter(void *data) {
-    char *state = (char *) data;
+    map_t *state = (map_t *) data;
     sleep(2);
     pthread_mutex_lock(&map_lock);
-    *state = '_';
+    state->state = '_';
+    state->visited = '.';
     pthread_mutex_unlock(&map_lock);
     pthread_exit(NULL);
 }
@@ -209,7 +215,7 @@ void *display_map(void *data) {
         for (int i = 0; i < GRID_SZ; ++i) {
             for (int j = 0; j < GRID_SZ; ++j) {
                 int color = 64; // green
-                switch (map[i][j]) {
+                switch (map[i][j].state) {
                     case '@':
                         color = 202; // orange
                         break;
@@ -223,7 +229,7 @@ void *display_map(void *data) {
                         break;
                 }
                 printf("\e[38;5;%dm", color);
-                printf("%2c", map[i][j]);
+                printf("%2c", map[i][j].state);
             }
             puts(" ");
         }

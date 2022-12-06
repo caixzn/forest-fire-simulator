@@ -128,9 +128,9 @@ int avl_tree_find(avl_tree* t, avl_node *v, uint32_t element) {
     if (v->element == element)
         return 1;
     else if (v->element > element)
-        return avl_tree_find_helper(t, v->left, element);
+        return avl_tree_find(t, v->left, element);
     else
-        return avl_tree_find_helper(t, v->right, element);
+        return avl_tree_find(t, v->right, element);
 }
 
 /**

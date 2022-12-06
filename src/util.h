@@ -19,6 +19,11 @@ typedef struct message_t {
     uint64_t message_id;
 } message_t;
 
+typedef struct map_t {
+    char state;
+    char visited;
+} map_t;
+
 void write_to_log(message_t msg);
 int msg_compare(void *a, void *b);
 

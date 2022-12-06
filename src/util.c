@@ -17,16 +17,3 @@ void write_to_log(message_t msg) {
     );
     fclose(log);
 }
-
-int msg_compare(void *a, void *b) {
-    message_t *msg_a = (message_t *) a; 
-    message_t *msg_b = (message_t *) b;
-    long time_diff = msg_a->time - msg_b->time;
-    if (msg_a->id == msg_b->id &&
-        (time_diff < 3 || time_diff > -3) &&
-        msg_a->pos.x == msg_b->pos.x &&
-        msg_a->pos.y == msg_b->pos.y) {
-            return 0;
-    }
-    return 1;
-}

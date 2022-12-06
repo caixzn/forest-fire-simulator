@@ -23,7 +23,7 @@ typedef struct avl_tree{
 }avl_tree;
 
 void avl_initialize(avl_tree** v);
-int avl_tree_find(avl_tree* t, avl_node *v, uint32_t element)
+int avl_tree_find(avl_tree* t, avl_node *v, uint32_t element);
 void avl_insert(avl_tree* tree, uint32_t element);
 void avl_remove(avl_tree* tree, uint32_t element);
 void avl_terminate(avl_tree** v);
