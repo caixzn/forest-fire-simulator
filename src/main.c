@@ -63,6 +63,15 @@ void map_init(void) {
     }
 }
 
+void* msg_remove(void *data) {
+    sleep(30);
+    char **visited = (char **) data;
+    for (size_t i = 0; i < GRID_SZ/3; i++)
+        free(visited[i]);
+    free(visited);
+    pthread_exit(NULL);
+}
+
 void *fire_spread(void *data) {
     srand(time(NULL));
     while (1) {
@@ -97,9 +106,12 @@ void *sensor_node(void *data) {
                     msg->pos.x = i;
                     msg->pos.y = j;
                     msg->message_id = rand();
+                    msg->visited = malloc(sizeof(char*) * GRID_SZ/3);
                     for (size_t i = 0; i < GRID_SZ/3; i++)
-                        for (size_t j = 0; j < GRID_SZ/3; j++)
-                            msg->visited[i][j] = 0;
+                        msg->visited[i] = calloc(GRID_SZ/3, sizeof(char));
+                    msg->visited[id_x][id_y] = 1;
+                    pthread_t thread_id;
+                    pthread_create(&thread_id, NULL, msg_remove, (void*) (msg->visited));
                     queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
                     free(msg);
                 }
@@ -142,9 +154,7 @@ void *sensor_node(void *data) {
                     while (it != NULL) {
                         message_t *m = (message_t *)it->data;
                         if (!m->visited[tmp_x][tmp_y]){
-                            pthread_mutex_lock(&msg_lock[id_x][id_y]);
-                            m->visited[id_x][id_y] = 1;
-                            pthread_mutex_unlock(&msg_lock[id_x][id_y]);
+                            m->visited[tmp_x][tmp_y] = 1;
                             queue_push_back(messages[tmp_x][tmp_y], make_node(it->data, sizeof(message_t)));
                         }
                         it = it->next;

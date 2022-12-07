@@ -15,7 +15,7 @@ typedef struct message_t {
     time_t time;
     pthread_t id;
     coord_t pos;
-    uint8_t visited[GRID_SZ/3][GRID_SZ/3];
+    char **visited;
     uint64_t message_id;
 } message_t;
 
