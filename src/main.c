@@ -101,6 +101,7 @@ void *sensor_node(void *data) {
                         for (size_t j = 0; j < GRID_SZ/3; j++)
                             msg->visited[i][j] = 0;
                     queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
+                    free(msg);
                 }
             }
         }
