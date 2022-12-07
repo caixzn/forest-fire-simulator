@@ -149,6 +149,12 @@ void *sensor_node(void *data) {
             else {
                 for (int i = 0; i < 4; ++i) {
                     int tmp_x = coords[i].x, tmp_y = coords[i].y;
+                    pthread_mutex_lock(&map_lock);
+                    if (map[tmp_x * 3 + 1][tmp_y * 3 + 1].state != 'T'){
+                        pthread_mutex_unlock(&map_lock);
+                        continue;
+                    }
+                    pthread_mutex_unlock(&map_lock);
                     queue_iter it = msgs_to_send->front;
                     pthread_mutex_lock(&msg_lock[tmp_x][tmp_y]);
                     while (it != NULL) {
