@@ -107,17 +107,16 @@ void *sensor_node(void *data) {
         }
         pthread_mutex_unlock(&map_lock);
 
+        pthread_mutex_lock(&msg_lock[id_x][id_y]);
         if (!queue_empty(messages[id_x][id_y])) {
-            pthread_mutex_lock(&msg_lock[id_x][id_y]);
-
             while (!queue_empty(messages[id_x][id_y])) {
                 queue_iter it = messages[id_x][id_y]->front;
                 message_t *m = (message_t *)it->data;
-                queue_pop_front(messages[id_x][id_y]);
                 queue_push_back(msgs_to_send, make_node((void *)m, sizeof(message_t)));
+                queue_pop_front(messages[id_x][id_y]);
             }
-            pthread_mutex_unlock(&msg_lock[id_x][id_y]);
         }
+        pthread_mutex_unlock(&msg_lock[id_x][id_y]);
 
         if (!queue_empty(msgs_to_send)) {
             coord_t coords[] = {
