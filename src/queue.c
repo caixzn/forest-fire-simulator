@@ -6,6 +6,7 @@
  * @brief Cria um novo elemento para inserir na fila
  * 
  * @param data Dados a serem armazenados
+ * @param sz Tamanho dos dados em BYTES
  * @return queue_iter
  */
 queue_iter make_node(void *data, size_t sz) {

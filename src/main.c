@@ -25,7 +25,6 @@ void *display_map(void *data);
 void *central_thread(void *data);
 
 int main(void) {
-    srand(time(NULL));
     msg_init();
     map_init();
     pthread_t central, fire, display;
@@ -50,7 +49,8 @@ void map_init(void) {
         for (int j = 0; j < GRID_SZ; ++j) {
             // grass
             map[i][j].state = 'w';
-            map[i][j].visited = '.';
+            // this is to prevent the same fire from being reported many times
+            map[i][j].burning = 0;
             // sensor node
             if (i%3 == 1 && j%3 == 1) {
                 map[i][j].state = 'T';
@@ -63,12 +63,12 @@ void map_init(void) {
     }
 }
 
-void* msg_remove(void *data) {
+void *msg_remove(void *data) {
     sleep(30);
-    char **visited = (char **) data;
-    for (size_t i = 0; i < GRID_SZ/3; i++)
-        free(visited[i]);
-    free(visited);
+    char **matrix = (char **) data;
+    free(matrix[0]);
+    free(matrix);
+    pthread_detach(pthread_self());
     pthread_exit(NULL);
 }
 
@@ -96,22 +96,26 @@ void *sensor_node(void *data) {
         pthread_mutex_lock(&map_lock);
         for (int i = x-1; i <= x+1; ++i) {
             for (int j = y-1; j <= y+1; ++j) {
-                if (map[i][j].visited == 'X')
+                if (map[i][j].burning == 1)
                     continue;
                 if (map[i][j].state == '@') {
-                    map[i][j].visited = 'X';
+                    map[i][j].burning = 1;
                     message_t *msg = malloc(sizeof(message_t));
                     msg->time = time(NULL);
                     msg->id = threads[id_x][id_y];
                     msg->pos.x = i;
                     msg->pos.y = j;
-                    msg->message_id = rand();
-                    msg->visited = malloc(sizeof(char*) * GRID_SZ/3);
-                    for (size_t i = 0; i < GRID_SZ/3; i++)
-                        msg->visited[i] = calloc(GRID_SZ/3, sizeof(char));
+                    msg->message_id = random();
+                    msg->visited = malloc(sizeof(char *)*(GRID_SZ/3));
+                    msg->visited[0] = calloc((GRID_SZ/3)*(GRID_SZ/3), sizeof(char));
+                    for (size_t i = 1; i < GRID_SZ/3; i++)
+                        msg->visited[i] = &(msg->visited[0][i*(GRID_SZ/3)]);
                     msg->visited[id_x][id_y] = 1;
                     pthread_t thread_id;
+
+                    // starts timer to delete message
                     pthread_create(&thread_id, NULL, msg_remove, (void*) (msg->visited));
+
                     queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
                     free(msg);
                 }
@@ -123,25 +127,31 @@ void *sensor_node(void *data) {
         if (!queue_empty(messages[id_x][id_y])) {
             while (!queue_empty(messages[id_x][id_y])) {
                 queue_iter it = messages[id_x][id_y]->front;
-                message_t *m = (message_t *)it->data;
-                queue_push_back(msgs_to_send, make_node((void *)m, sizeof(message_t)));
+                queue_push_back(msgs_to_send, make_node(it->data, sizeof(message_t)));
                 queue_pop_front(messages[id_x][id_y]);
             }
         }
         pthread_mutex_unlock(&msg_lock[id_x][id_y]);
 
         if (!queue_empty(msgs_to_send)) {
+            // neighbor nodes
             coord_t coords[] = {
                 {id_x - 1, id_y},
                 {id_x + 1, id_y},
                 {id_x, id_y - 1},
                 {id_x, id_y + 1}
             };
+
+            // check if node is on the border
+            // if it is, communicate with central thread
             if (id_x - 1 < 0 || id_y - 1 < 0 || id_x + 1 >= GRID_SZ/3 ||
                 id_y + 1 >= GRID_SZ/3) {
                 pthread_mutex_lock(&central_lock);
                 while (!queue_empty(msgs_to_send)) {
-                    queue_push_back(central_alerts, make_node(msgs_to_send->front->data, sizeof(message_t)));
+                    queue_push_back(
+                        central_alerts,
+                        make_node(msgs_to_send->front->data, sizeof(message_t))
+                    );
                     queue_pop_front(msgs_to_send);
                 }
                 pthread_mutex_unlock(&central_lock);
@@ -150,23 +160,28 @@ void *sensor_node(void *data) {
                 for (int i = 0; i < 4; ++i) {
                     int tmp_x = coords[i].x, tmp_y = coords[i].y;
                     pthread_mutex_lock(&map_lock);
-                    if (map[tmp_x * 3 + 1][tmp_y * 3 + 1].state != 'T'){
+                    if (map[x][y].state != 'T'){
                         pthread_mutex_unlock(&map_lock);
                         continue;
                     }
                     pthread_mutex_unlock(&map_lock);
+
                     queue_iter it = msgs_to_send->front;
                     pthread_mutex_lock(&msg_lock[tmp_x][tmp_y]);
                     while (it != NULL) {
                         message_t *m = (message_t *)it->data;
                         if (!m->visited[tmp_x][tmp_y]){
                             m->visited[tmp_x][tmp_y] = 1;
-                            queue_push_back(messages[tmp_x][tmp_y], make_node(it->data, sizeof(message_t)));
+                            queue_push_back(
+                                messages[tmp_x][tmp_y],
+                                make_node(it->data, sizeof(message_t))
+                            );
                         }
                         it = it->next;
                     }
                     pthread_mutex_unlock(&msg_lock[tmp_x][tmp_y]);
                 }
+
                 while (!queue_empty(msgs_to_send))
                     queue_pop_front(msgs_to_send);
             }
@@ -175,6 +190,7 @@ void *sensor_node(void *data) {
         sleep(1);
     }
 
+    // clean up when node is destroyed
     pthread_mutex_lock(&msg_lock[id_x][id_y]);
     while (!queue_empty(messages[id_x][id_y]))
         queue_pop_front(messages[id_x][id_y]);
@@ -186,10 +202,7 @@ void *sensor_node(void *data) {
 void *central_thread(void *data) {
     central_alerts = new_queue();
 
-    FILE* start_log = fopen("incendios.log", "w");
-    fclose(start_log);
-
-    avl_tree* message_ids;
+    avl_tree *message_ids;
     avl_initialize(&message_ids);
 
     while (1) {
@@ -216,17 +229,20 @@ void *firefighter(void *data) {
     sleep(2);
     pthread_mutex_lock(&map_lock);
     state->state = '_';
-    state->visited = '.';
+    state->burning = 0;
     pthread_mutex_unlock(&map_lock);
+
+    pthread_detach(pthread_self());
     pthread_exit(NULL);
 }
 
 void *display_map(void *data) {
     // background color
     printf("\e[48;5;106m");
+    // clears the terminal screen
+    system("tput clear");
+
     while (1) {
-        // clears the terminal screen
-        system("tput clear");
         pthread_mutex_lock(&map_lock);
         for (int i = 0; i < GRID_SZ; ++i) {
             for (int j = 0; j < GRID_SZ; ++j) {

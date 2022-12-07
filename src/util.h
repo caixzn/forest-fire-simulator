@@ -21,7 +21,7 @@ typedef struct message_t {
 
 typedef struct map_t {
     char state;
-    char visited;
+    char burning;
 } map_t;
 
 void write_to_log(message_t msg);
