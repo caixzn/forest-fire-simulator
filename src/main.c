@@ -205,6 +205,10 @@ void *central_thread(void *data) {
     avl_tree *message_ids;
     avl_initialize(&message_ids);
 
+    // clears the contents in the log file
+    FILE *clear = fopen("incendios.log", "w");
+    fclose(clear);
+
     while (1) {
         sleep(1);
         pthread_mutex_lock(&central_lock);
