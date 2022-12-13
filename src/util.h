@@ -24,7 +24,14 @@ typedef struct map_t {
     char burning;
 } map_t;
 
+typedef struct fire_t {
+    time_t time;
+    coord_t pos;
+} fire_t;
+
 void write_to_log(message_t msg);
+void write_debug(fire_t fire, time_t t, int aux);
 int msg_compare(void *a, void *b);
+int max(int a, int b);
 
 #endif

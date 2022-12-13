@@ -15,10 +15,16 @@ queue *messages[GRID_SZ/3][GRID_SZ/3];
 pthread_mutex_t msg_lock[GRID_SZ/3][GRID_SZ/3];
 queue *central_alerts;
 pthread_mutex_t central_lock = PTHREAD_MUTEX_INITIALIZER;
+queue *fire_queue;
+pthread_mutex_t fire_queue_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t empty;
 
 void map_init(void);
 void msg_init(void);
-void *fire_spread(void *data);
+void *create_fire();
+void *spread_fire();
+void spread_fire_aux(fire_t fire, time_t t);
+void fire_spread_queue(time_t time, coord_t pos);
 void *sensor_node(void *data);
 void *firefighter(void *data);
 void *display_map(void *data);
@@ -27,11 +33,13 @@ void *central_thread(void *data);
 int main(void) {
     msg_init();
     map_init();
-    pthread_t central, fire, display;
+    pthread_t central, fire, display, fire_monitor;
     pthread_create(&central, NULL, central_thread, NULL);
-    pthread_create(&fire, NULL, fire_spread, NULL);
+    pthread_create(&fire_monitor, NULL, spread_fire, NULL);
+    pthread_create(&fire, NULL, create_fire, NULL);
     pthread_create(&display, NULL, display_map, NULL);
     pthread_join(display, NULL);
+    pthread_join(fire_monitor, NULL);
     // the program never terminates itself
 }
 
@@ -72,15 +80,87 @@ void *msg_remove(void *data) {
     pthread_exit(NULL);
 }
 
-void *fire_spread(void *data) {
+void *create_fire() {
     srand(time(NULL));
     while (1) {
         sleep(5);
-        int x = random() % GRID_SZ;
-        int y = random() % GRID_SZ;
+        coord_t pos;
+        pos.x = random() % GRID_SZ;
+        pos.y = random() % GRID_SZ;
         pthread_mutex_lock(&map_lock);
-        map[x][y].state = '@';
+        if(map[pos.x][pos.y].state != '@') {
+            map[pos.x][pos.y].state = '@';
+            pthread_mutex_lock(&fire_queue_lock);
+            time_t t = time(NULL);  
+            fire_spread_queue(t, pos);
+            pthread_mutex_unlock(&fire_queue_lock);
+        }
         pthread_mutex_unlock(&map_lock);
+    }
+}
+
+void *spread_fire() {
+    fire_queue = new_queue();
+    FILE *debug = fopen("debug.log", "w");
+    fclose(debug);
+    int time_alive = 1;
+    while(1) {
+        sleep(1);
+        pthread_mutex_lock(&fire_queue_lock);
+        if(queue_empty(fire_queue)) {
+            pthread_cond_wait(&empty, &fire_queue_lock);
+        }
+        else {
+            int spreading = 1;
+            time_t current_time = time(NULL);
+            while(spreading && !queue_empty(fire_queue)) {
+                queue_iter it = fire_queue->front;
+                fire_t fire = *(fire_t *)it->data; 
+                pthread_mutex_lock(&map_lock);
+                if(map[fire.pos.x][fire.pos.y].state == '@') {
+                    time_alive = current_time - fire.time;
+                    if(time_alive >= 20) {
+                        spread_fire_aux(fire, current_time);
+                        // Fazer o push_back
+                        fire_spread_queue(current_time, fire.pos);
+                        queue_pop_front(fire_queue);    
+                    }
+                    else{
+                        spreading = 0;
+                    }
+                }
+                else {
+                    queue_pop_front(fire_queue);
+                }
+                // Apagar antes de subir para produção
+                write_debug(fire, current_time, time_alive);
+                pthread_mutex_unlock(&map_lock);
+            }
+        }
+        pthread_mutex_unlock(&fire_queue_lock);   
+    }
+}
+
+void spread_fire_aux(fire_t fire, time_t t) {
+    // printf("Spread fire aux\n");
+    int surroundings[] = {-1, 0, 1};
+    coord_t pos = fire.pos;
+    for (size_t i = 0; i < 3; i++) {
+        for(size_t j = 0; j < 3; j++) {
+            coord_t new_pos;
+            new_pos.x = pos.x + surroundings[i];
+            if(new_pos.x < 0 || new_pos.x >= GRID_SZ){
+                continue;
+            }
+            new_pos.y = pos.y + surroundings[j];
+            if(new_pos.y < 0 || new_pos.y >= GRID_SZ) {
+                continue;
+            }
+            if(map[new_pos.x][new_pos.y].state != '@') {
+                map[new_pos.x][new_pos.y].state = '@';
+                fire_spread_queue(t, new_pos);
+            }
+        }
     }
 }
 
@@ -103,6 +183,7 @@ void *sensor_node(void *data) {
                     message_t *msg = malloc(sizeof(message_t));
                     msg->time = time(NULL);
                     msg->id = threads[id_x][id_y];
+                    // Fire position
                     msg->pos.x = i;
                     msg->pos.y = j;
                     msg->message_id = random();
@@ -275,3 +356,14 @@ void *display_map(void *data) {
         sleep(1);
     }
 }
+
+void fire_spread_queue(time_t time, coord_t pos) {
+    fire_t *fire = malloc(sizeof(fire_t));
+    fire->time = time;
+    fire->pos = pos;
+    queue_push_back(fire_queue, make_node(fire, sizeof(fire_t)));
+    pthread_cond_signal(&empty);
+    free(fire);
+}
+
+
