@@ -5,8 +5,6 @@
 #include <pthread.h>
 #include <stdint.h>
 
-#define GRID_SZ 30
-
 typedef struct coord_t {
     int x, y;
 } coord_t;

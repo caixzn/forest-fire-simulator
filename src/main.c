@@ -8,6 +8,10 @@
 #include "queue.h"
 #include "avl_tree.h"
 
+#define GRID_SZ 30
+#define FIREFIGHTER_DELAY 2
+#define FIRE_SPREAD_DELAY 5
+
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 map_t map[GRID_SZ][GRID_SZ];
 pthread_t threads[GRID_SZ/3][GRID_SZ/3];
@@ -49,7 +53,7 @@ void map_init(void) {
         for (int j = 0; j < GRID_SZ; ++j) {
             // grass
             map[i][j].state = 'w';
-            // this is to prevent the same fire from being reported many times
+            // this 'burning' flag is to prevent the same fire from being reported many times
             map[i][j].burning = 0;
             // sensor node
             if (i%3 == 1 && j%3 == 1) {
@@ -63,8 +67,8 @@ void map_init(void) {
     }
 }
 
-void *msg_remove(void *data) {
-    sleep(30);
+void *matrix_remove(void *data) {
+    sleep(GRID_SZ);
     char **matrix = (char **) data;
     free(matrix[0]);
     free(matrix);
@@ -75,7 +79,7 @@ void *msg_remove(void *data) {
 void *fire_spread(void *data) {
     srand(time(NULL));
     while (1) {
-        sleep(5);
+        sleep(FIRE_SPREAD_DELAY);
         int x = random() % GRID_SZ;
         int y = random() % GRID_SZ;
         pthread_mutex_lock(&map_lock);
@@ -114,7 +118,7 @@ void *sensor_node(void *data) {
                     pthread_t thread_id;
 
                     // starts timer to delete message
-                    pthread_create(&thread_id, NULL, msg_remove, (void*) (msg->visited));
+                    pthread_create(&thread_id, NULL, matrix_remove, (void*) (msg->visited));
 
                     queue_push_back(msgs_to_send, make_node((void *)msg, sizeof(message_t)));
                     free(msg);
@@ -170,6 +174,8 @@ void *sensor_node(void *data) {
                     pthread_mutex_lock(&msg_lock[tmp_x][tmp_y]);
                     while (it != NULL) {
                         message_t *m = (message_t *)it->data;
+                        // each message keeps track of which nodes it has
+                        // visited, so it doesn't propagate forever
                         if (!m->visited[tmp_x][tmp_y]){
                             m->visited[tmp_x][tmp_y] = 1;
                             queue_push_back(
@@ -182,6 +188,7 @@ void *sensor_node(void *data) {
                     pthread_mutex_unlock(&msg_lock[tmp_x][tmp_y]);
                 }
 
+                // removes the messages which were not sent
                 while (!queue_empty(msgs_to_send))
                     queue_pop_front(msgs_to_send);
             }
@@ -195,6 +202,8 @@ void *sensor_node(void *data) {
     while (!queue_empty(messages[id_x][id_y]))
         queue_pop_front(messages[id_x][id_y]);
     pthread_mutex_unlock(&msg_lock[id_x][id_y]);
+
+    // detach so it frees up resources
     pthread_detach(pthread_self());
     pthread_exit(NULL);
 }
@@ -215,6 +224,7 @@ void *central_thread(void *data) {
         while (!queue_empty(central_alerts)) {
             queue_iter new = central_alerts->front;
             message_t new_msg = *(message_t *)new->data;
+            // this AVL tree prevents duplicate entries in the fire log
             if (!avl_tree_find(message_ids, message_ids->root, new_msg.message_id)){
                 avl_insert(message_ids, new_msg.message_id);
                 pthread_t thread_id;
@@ -230,7 +240,7 @@ void *central_thread(void *data) {
 
 void *firefighter(void *data) {
     map_t *state = (map_t *) data;
-    sleep(2);
+    sleep(FIREFIGHTER_DELAY);
     pthread_mutex_lock(&map_lock);
     state->state = '_';
     state->burning = 0;

@@ -1,14 +1,13 @@
 # Florestal fires detector simulator.
 Nowadays, one of the great challenges for countries that have a vast forest region is to deal with the high occurrence of forest fires, whether criminally or naturally caused, such as those observed in the Amazon and the Brazilian cerrado. Therefore, the detection of fire outbreaks is of great importance to protect the fauna, flora and, in many cases, the lives of many people.
 
-## Authors
-* Name: Matheus Loiola Pinto Curado Silva
-* Matriculation: 211057600016
-* Name: Caio Padilha Aguiar
-* Matriculation: 211057600003
-* Name: Leonam Knupp
-* Matriculation: 211057600001
-* Sistemas Operacionais 1 - Class A
+## Autores
+* Nome: Matheus Loiola Pinto Curado Silva
+* Matrícula: 211057600016
+* Nome: Caio Padilha Aguiar
+* Matrícula: 211057600003
+* Nome: Leonam Knupp
+* Matrícula: 211057600001
 
 ## Desenvolvimento e estrutura do projeto.
 

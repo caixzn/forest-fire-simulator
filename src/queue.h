@@ -1,7 +1,7 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-// cada elemento da fila armazena as informações do processo e um ponteiro para o proximo da fila
+// cada elemento da fila armazena seus dados e um ponteiro para o proximo da fila
 typedef struct queue_node {
     void *data;
     struct queue_node* next;
@@ -10,8 +10,8 @@ typedef struct queue_node {
 typedef struct queue_node* queue_iter;
 
 // a fila armazena um ponteiro para o primeiro da fila e um para o ultimo
-// front == back -> apenas 1 elemento na fila
-// front == NULL && back == NULL -> fila vazia
+// (front == back), significa que tem apenas 1 elemento na fila
+// (front == NULL && back == NULL) quer dizer que a fila está vazia
 typedef struct queue {
     queue_iter front, back;
 } queue;
